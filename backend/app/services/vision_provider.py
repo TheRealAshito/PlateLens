@@ -83,19 +83,46 @@ GEMINI_RESPONSE_SCHEMA = {
 }
 
 
-def build_plate_prompt(user_context: str = "", plate_size: str = "normal") -> str:
-    context_line = f"Contexto informado pelo usuário: {user_context.strip()}." if user_context.strip() else "Sem contexto extra do usuário."
+def build_plate_prompt(
+    user_context: str = "",
+    plate_size: str = "normal",
+    taco_names: list[str] | None = None,
+) -> str:
+    if user_context.strip():
+        context_block = (
+            f"DESCRIÇÃO INFORMADA PELO USUÁRIO (FONTE PRIORITÁRIA PARA IDENTIFICAR OS ALIMENTOS):\n"
+            f"\"{user_context.strip()}\"\n"
+            "REGRA DE OURO: Respeite exatamente os alimentos, ingredientes e preparos que o usuário informou "
+            "(ex.: se disse 'purê de mandioca', NÃO troque por 'purê de batata'; se disse 'frango empanado', "
+            "NÃO troque por 'frango grelhado'). Use a FOTO principalmente para estimar o tamanho/peso em gramas "
+            "de cada item descrito e para identificar acompanhamentos visíveis extras que o usuário não citou."
+        )
+    else:
+        context_block = "Sem descrição textual do usuário: identifique os alimentos e porções apenas pela foto."
+
+    catalog_block = ""
+    if taco_names:
+        catalog_sample = "; ".join(taco_names[:250])
+        catalog_block = (
+            "\nCatálogo disponível na Tabela TACO local:\n"
+            f"[{catalog_sample}]\n"
+            "- Se o alimento corresponder fielmente a um item desta lista, use o nome EXATO dele em 'search_query'.\n"
+            "- Se NÃO existir equivalência fiel (ex.: preparação frita/empanada vs grelhada, ou purê de mandioca vs purê de batata), "
+            "NÃO force um item errado da lista: mantenha o nome real do prato em 'name' e 'search_query' e preencha "
+            "'fallback_per_100g' com valores nutricionais realistas por 100g."
+        )
+
     return (
         "Você é um assistente especialista em análise visual de refeições brasileiras e tabela nutricional TACO.\n"
-        "Analise a foto do prato e identifique cada alimento visível separadamente.\n"
-        f"Tamanho de prato indicado: {plate_size}.\n"
-        f"{context_line}\n\n"
+        "Analise a foto do prato e a descrição do usuário, listando cada alimento separadamente.\n"
+        f"Tamanho de prato indicado: {plate_size}.\n\n"
+        f"{context_block}\n\n"
         "Regras:\n"
         "1. Escreva 'name', 'search_query', 'portion_label', 'plate_summary' e 'warnings' em Português do Brasil.\n"
-        "2. Em 'search_query', use termos simples da Tabela TACO (ex: 'arroz branco cozido', 'feijao carioca cozido', 'peito de frango grelhado').\n"
-        "3. Estime 'estimated_grams' de forma realista para a porção visível no prato.\n"
-        "4. Em 'warnings', alerte sobre possíveis calorias ocultas (óleo de preparo, azeite, manteiga, molho, açúcar).\n"
-        "5. Preencha 'fallback_per_100g' com valores nutricionais plausíveis por 100g caso não haja match exato na TACO.\n"
+        "2. Estime 'estimated_grams' de forma realista para a porção visível no prato (ou conforme quantidades descritas pelo usuário).\n"
+        "3. Em 'warnings', alerte sobre possíveis calorias ocultas (óleo de preparo, azeite, manteiga, molho, açúcar).\n"
+        "4. Preencha sempre 'fallback_per_100g' com valores nutricionais plausíveis por 100g.\n"
+        f"{catalog_block}\n"
         "Responda SOMENTE com JSON válido seguindo o schema solicitado."
     )
 
@@ -107,6 +134,7 @@ class VisionProvider(Protocol):
         user_context: str = "",
         plate_size: str = "normal",
         model_mode: ModelMode = "precise",
+        taco_names: list[str] | None = None,
     ) -> VisionAnalysisResult: ...
 
 
@@ -172,11 +200,12 @@ class GeminiVisionProvider:
         user_context: str = "",
         plate_size: str = "normal",
         model_mode: ModelMode = "precise",
+        taco_names: list[str] | None = None,
     ) -> VisionAnalysisResult:
         if not self.api_key:
             raise VisionNotConfiguredError("Configure sua chave da Gemini API para analisar fotos.")
 
-        prompt = build_plate_prompt(user_context, plate_size)
+        prompt = build_plate_prompt(user_context, plate_size, taco_names=taco_names)
         chosen_model = self.fallback_model if model_mode == "lite" else self.primary_model
         used_fallback = False
 
@@ -217,13 +246,14 @@ class OllamaVisionProvider:
         user_context: str = "",
         plate_size: str = "normal",
         model_mode: ModelMode = "precise",
+        taco_names: list[str] | None = None,
     ) -> VisionAnalysisResult:
         if not self.base_url:
             raise VisionNotConfiguredError("Configure a URL do Ollama na rede local em Configurações.")
 
         b64_img = base64.b64encode(image_bytes).decode("ascii")
         prompt = (
-            build_plate_prompt(user_context, plate_size)
+            build_plate_prompt(user_context, plate_size, taco_names=taco_names)
             + "\nFormato JSON obrigatório: {plate_summary, overall_confidence, warnings, items: [{name, search_query, estimated_grams, portion_label, confidence, fallback_per_100g: {kcal, protein_g, carbs_g, fat_g, fiber_g}}]}"
         )
         payload = {
@@ -258,6 +288,7 @@ class MockVisionProvider:
         user_context: str = "",
         plate_size: str = "normal",
         model_mode: ModelMode = "precise",
+        taco_names: list[str] | None = None,
     ) -> VisionAnalysisResult:
         model_name = "mock-lite" if model_mode == "lite" else "mock-precise"
         return VisionAnalysisResult(

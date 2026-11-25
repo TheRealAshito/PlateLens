@@ -178,6 +178,12 @@ async def analyze_plate_photo(
 
     with get_connection(settings) as conn:
         ai_cfg = get_effective_ai_config(conn, settings)
+        taco_names = [
+            row["name"]
+            for row in conn.execute(
+                "SELECT name FROM taco_foods ORDER BY is_custom DESC, name ASC LIMIT 250"
+            ).fetchall()
+        ]
 
     try:
         provider = build_vision_provider(ai_cfg)
@@ -186,6 +192,7 @@ async def analyze_plate_photo(
             user_context=meal_context,
             plate_size=plate_size,
             model_mode=model_mode,
+            taco_names=taco_names,
         )
     except VisionNotConfiguredError as exc:
         saved_path = settings.uploads_dir / photo_filename

@@ -2,7 +2,11 @@ import { useEffect, useState } from 'react'
 import { Search, Plus, X } from 'lucide-react'
 import { api } from '../api'
 
-export default function TacoSearchModal({ onSelect, onClose }) {
+export default function TacoSearchModal({
+  onSelect,
+  onClose,
+  title = 'Adicionar alimento da Tabela TACO',
+}) {
   const [query, setQuery] = useState('')
   const [foods, setFoods] = useState([])
   const [loading, setLoading] = useState(false)
@@ -24,7 +28,7 @@ export default function TacoSearchModal({ onSelect, onClose }) {
     <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-slate-950/80 p-0 sm:p-4 backdrop-blur-sm">
       <div className="flex max-h-[85vh] w-full max-w-xl flex-col rounded-t-2xl sm:rounded-2xl border border-slate-800 bg-slate-900 shadow-2xl">
         <div className="flex items-center justify-between border-b border-slate-800 px-4 py-3">
-          <h3 className="text-sm font-semibold text-white">Adicionar alimento da Tabela TACO</h3>
+          <h3 className="text-sm font-semibold text-white">{title}</h3>
           <button
             type="button"
             onClick={onClose}

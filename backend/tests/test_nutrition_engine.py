@@ -102,3 +102,32 @@ def test_calculate_macros_for_calories_presets_and_cap():
     low_carb = calculate_macros_for_calories(1800.0, weight_kg=75.0, preset="low_carb")
     assert low_carb.carbs_goal_g == 90.0
     assert low_carb.fat_goal_g > bal.fat_goal_g
+
+
+def test_match_taco_food_avoids_semantic_conflicts(tmp_path, monkeypatch):
+    monkeypatch.setenv("PLATELENS_DATA_DIR", str(tmp_path / "data"))
+    settings = get_settings()
+    init_db(settings)
+
+    with get_connection(settings) as conn:
+        # Não deve trocar purê de mandioca por purê de batata
+        assert match_taco_food(conn, "purê de mandioca", "Purê de mandioca") is None
+        # Não deve trocar frango empanado por peito de frango grelhado
+        assert match_taco_food(conn, "peito de frango empanado", "Frango empanado") is None
+        # Matches exatos continuam funcionando normalmente
+        pure_batata = match_taco_food(conn, "purê de batata")
+        assert pure_batata is not None
+        assert pure_batata["name"] == "Purê de batata"
+
+
+def test_build_plate_prompt_prioritizes_user_description():
+    from backend.app.services.vision_provider import build_plate_prompt
+
+    prompt = build_plate_prompt(
+        user_context="arroz branco, purê de mandioca e bife",
+        plate_size="normal",
+        taco_names=["Arroz branco cozido", "Purê de batata"],
+    )
+    assert "FONTE PRIORITÁRIA" in prompt
+    assert "arroz branco, purê de mandioca e bife" in prompt
+    assert "Arroz branco cozido; Purê de batata" in prompt

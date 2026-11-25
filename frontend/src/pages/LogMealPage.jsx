@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import {
   AlertTriangle,
+  ArrowLeftRight,
   Camera,
   Check,
   ImagePlus,
@@ -8,6 +9,7 @@ import {
   Minus,
   Pencil,
   Plus,
+  RefreshCw,
   Search,
   Sparkles,
   Star,
@@ -53,6 +55,7 @@ export default function LogMealPage({
   const [isFavorite, setIsFavorite] = useState(false)
 
   const [showTacoModal, setShowTacoModal] = useState(false)
+  const [swappingIndex, setSwappingIndex] = useState(null)
   const [favorites, setFavorites] = useState([])
   const [loadingFavs, setLoadingFavs] = useState(false)
 
@@ -132,7 +135,7 @@ export default function LogMealPage({
   }
 
   async function handleAnalyzePhoto(e) {
-    e.preventDefault()
+    if (e) e.preventDefault()
     if (!file) {
       setError('Tire ou selecione uma foto do prato primeiro.')
       return
@@ -176,13 +179,18 @@ export default function LogMealPage({
     await recalculateItems(updated)
   }
 
-  async function handleAddTacoFood(food) {
+  async function handleSelectTacoFood(food) {
+    const targetIdx = swappingIndex
     setShowTacoModal(false)
-    const defaultGrams = food.household_unit_grams || 100
+    setSwappingIndex(null)
+
+    const existingGrams =
+      targetIdx !== null && items[targetIdx] ? items[targetIdx].grams : null
+    const chosenGrams = existingGrams || food.household_unit_grams || 100
     const nextItem = {
       taco_food_id: food.id,
       label: food.name,
-      grams: defaultGrams,
+      grams: chosenGrams,
       per_100g: {
         kcal: food.kcal_per_100g,
         protein_g: food.protein_g,
@@ -191,12 +199,18 @@ export default function LogMealPage({
         fiber_g: food.fiber_g,
       },
       confidence: 1.0,
-      source: items.length > 0 ? 'taco' : 'manual',
+      source: targetIdx !== null || items.length > 0 ? 'taco' : 'manual',
     }
     if (!draftTitle) {
       setDraftTitle(food.name)
     }
-    await recalculateItems([...items, nextItem])
+
+    if (targetIdx !== null && items[targetIdx]) {
+      const updated = items.map((it, i) => (i === targetIdx ? nextItem : it))
+      await recalculateItems(updated)
+    } else {
+      await recalculateItems([...items, nextItem])
+    }
   }
 
   function resetCustomForm() {
@@ -264,7 +278,7 @@ export default function LogMealPage({
         const { data } = await api.post('/foods', payload)
         resetCustomForm()
         await loadCustomFoods()
-        await handleAddTacoFood(data)
+        await handleSelectTacoFood(data)
       }
     } catch (err) {
       setError(extractErrorMessage(err))
@@ -464,16 +478,19 @@ export default function LogMealPage({
             </div>
 
             <div>
-              <label className="mb-1 block text-xs text-slate-400">
-                Dica opcional (ajuda com óleos, molhos ou preparo)
+              <label className="mb-1 block text-xs font-medium text-slate-200">
+                O que você está comendo? (Recomendado — guia a IA)
               </label>
-              <input
-                type="text"
+              <textarea
+                rows={2}
                 value={contextHint}
                 onChange={(e) => setContextHint(e.target.value)}
-                placeholder="Ex: frango grelhado no azeite, feijão sem linguiça, café sem açúcar..."
+                placeholder="Ex: arroz branco, purê de mandioca, bife acebolado na manteiga, salada com azeite..."
                 className="w-full rounded-xl border border-slate-700 bg-slate-950 px-3.5 py-2.5 text-sm text-white placeholder-slate-500 focus:border-emerald-500 focus:outline-none"
               />
+              <p className="mt-1 text-[11px] text-slate-400">
+                O texto define exatamente os alimentos (ex.: purê de mandioca vs. batata); a foto ajuda a estimar as porções e pesos em gramas.
+              </p>
             </div>
 
             <button
@@ -633,7 +650,7 @@ export default function LogMealPage({
                     <div className="flex items-center gap-1.5">
                       <button
                         type="button"
-                        onClick={() => handleAddTacoFood(cf)}
+                        onClick={() => handleSelectTacoFood(cf)}
                         className="rounded-lg bg-emerald-500/15 px-2.5 py-1 text-[11px] font-semibold text-emerald-300 hover:bg-emerald-500/25"
                       >
                         + Usar
@@ -708,16 +725,32 @@ export default function LogMealPage({
             <div>
               <h3 className="text-base font-semibold text-white">Revisar porções & Salvar</h3>
               <p className="text-xs text-slate-400">
-                Ajuste os gramas abaixo — os macros recalculam instantaneamente na Tabela TACO.
+                Ajuste os gramas ou troque itens abaixo — os macros recalculam na hora pela Tabela TACO.
               </p>
             </div>
-            <button
-              type="button"
-              onClick={() => setShowTacoModal(true)}
-              className="inline-flex items-center gap-1 rounded-xl border border-emerald-500/40 bg-emerald-500/10 px-3 py-1.5 text-xs font-semibold text-emerald-300 hover:bg-emerald-500/20"
-            >
-              <Plus className="h-3.5 w-3.5" /> Add item (azeite, molho...)
-            </button>
+            <div className="flex flex-wrap items-center gap-2">
+              {file && tab === 'photo' && (
+                <button
+                  type="button"
+                  disabled={analyzing}
+                  onClick={() => handleAnalyzePhoto()}
+                  className="inline-flex items-center gap-1 rounded-xl border border-slate-700 bg-slate-800 px-3 py-1.5 text-xs font-medium text-slate-200 hover:bg-slate-700 disabled:opacity-50"
+                >
+                  <RefreshCw className={`h-3.5 w-3.5 ${analyzing ? 'animate-spin' : ''}`} />
+                  Reanalisar
+                </button>
+              )}
+              <button
+                type="button"
+                onClick={() => {
+                  setSwappingIndex(null)
+                  setShowTacoModal(true)
+                }}
+                className="inline-flex items-center gap-1 rounded-xl border border-emerald-500/40 bg-emerald-500/10 px-3 py-1.5 text-xs font-semibold text-emerald-300 hover:bg-emerald-500/20"
+              >
+                <Plus className="h-3.5 w-3.5" /> Add item (azeite, molho...)
+              </button>
+            </div>
           </div>
 
           {warnings.length > 0 && (
@@ -784,14 +817,27 @@ export default function LogMealPage({
                       {item.portion_label ? ` · ${item.portion_label}` : ''}
                     </p>
                   </div>
-                  <button
-                    type="button"
-                    onClick={() => handleRemoveItem(idx)}
-                    className="rounded-lg p-1 text-slate-400 hover:bg-rose-500/15 hover:text-rose-400"
-                    aria-label="Remover item"
-                  >
-                    <Trash2 className="h-4 w-4" />
-                  </button>
+                  <div className="flex items-center gap-1 shrink-0">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setSwappingIndex(idx)
+                        setShowTacoModal(true)
+                      }}
+                      className="inline-flex items-center gap-1 rounded-lg border border-slate-700 bg-slate-900 px-2 py-1 text-[11px] font-medium text-slate-200 hover:bg-slate-800"
+                      aria-label={`Trocar ${item.label}`}
+                    >
+                      <ArrowLeftRight className="h-3 w-3" /> Trocar
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => handleRemoveItem(idx)}
+                      className="rounded-lg p-1.5 text-slate-400 hover:bg-rose-500/15 hover:text-rose-400"
+                      aria-label="Remover item"
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </button>
+                  </div>
                 </div>
 
                 <div className="flex flex-wrap items-center justify-between gap-2">
@@ -910,8 +956,16 @@ export default function LogMealPage({
 
       {showTacoModal && (
         <TacoSearchModal
-          onSelect={handleAddTacoFood}
-          onClose={() => setShowTacoModal(false)}
+          title={
+            swappingIndex !== null
+              ? 'Trocar alimento por outro da Tabela TACO'
+              : 'Adicionar alimento da Tabela TACO'
+          }
+          onSelect={handleSelectTacoFood}
+          onClose={() => {
+            setShowTacoModal(false)
+            setSwappingIndex(null)
+          }}
         />
       )}
     </div>

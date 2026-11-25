@@ -82,28 +82,72 @@ def search_taco_foods(conn: sqlite3.Connection, query: str, limit: int = 20) -> 
     return [item for _, item in scored[:limit]]
 
 
+STOP_WORDS = {
+    "a", "o", "as", "os", "de", "da", "do", "das", "dos",
+    "com", "sem", "ao", "aos", "em", "no", "na", "nos", "nas",
+    "e", "ou", "por", "para",
+}
+FRIED_BREADED_TOKENS = {"frito", "frita", "empanado", "empanada", "milanesa", "parmegiana", "dore"}
+LEAN_PREP_TOKENS = {"grelhado", "grelhada", "cozido", "cozida", "assado", "assada"}
+
+
+def _meaningful_tokens(text_norm: str) -> list[str]:
+    return [tok for tok in text_norm.split() if len(tok) >= 2 and tok not in STOP_WORDS]
+
+
+def _has_semantic_conflict(query_tokens: set[str], target_tokens: set[str]) -> bool:
+    """Evita matches incompatíveis entre preparos ou bases diferentes."""
+    q_fried = bool(query_tokens & FRIED_BREADED_TOKENS)
+    t_lean = bool(target_tokens & LEAN_PREP_TOKENS)
+    t_fried = bool(target_tokens & FRIED_BREADED_TOKENS)
+    q_lean = bool(query_tokens & LEAN_PREP_TOKENS)
+    if (q_fried and t_lean and not t_fried) or (q_lean and t_fried and not t_lean):
+        return True
+
+    # Evita trocar base distinta (ex.: purê de mandioca vs purê de batata)
+    if ("mandioca" in query_tokens or "aipim" in query_tokens) and "batata" in target_tokens and "mandioca" not in target_tokens:
+        return True
+    if "batata" in query_tokens and ("mandioca" in target_tokens or "aipim" in target_tokens) and "batata" not in target_tokens:
+        return True
+    if "zero" in query_tokens and "zero" not in target_tokens:
+        return True
+    return False
+
+
 def match_taco_food(
     conn: sqlite3.Connection,
     search_query: str,
     fallback_name: str = "",
 ) -> Optional[dict]:
-    """Encontra o melhor alimento correspondente na Tabela TACO."""
+    """Encontra o melhor alimento correspondente na Tabela TACO sem forçar matches ruins."""
     for candidate in (search_query, fallback_name):
         q_norm = normalize_text(candidate)
         if not q_norm:
             continue
-        tokens = [tok for tok in q_norm.split() if len(tok) >= 2]
+        tokens = _meaningful_tokens(q_norm)
         if not tokens:
             continue
-        matches = search_taco_foods(conn, candidate, limit=3)
+
+        matches = search_taco_foods(conn, " ".join(tokens), limit=5)
         if not matches:
             continue
-        top = matches[0]
-        top_norm = top["name_normalized"]
-        overlap = sum(1 for tok in tokens if tok in top_norm)
-        # Exige match mínimo de pelo menos 1 token significativo ou substring direta
-        if q_norm in top_norm or overlap >= max(1, len(tokens) // 2):
-            return top
+
+        query_set = set(tokens)
+        for cand in matches:
+            cand_norm = cand["name_normalized"]
+            cand_tokens = set(_meaningful_tokens(cand_norm))
+            if _has_semantic_conflict(query_set, cand_tokens):
+                continue
+
+            overlap = sum(1 for tok in tokens if tok in cand_tokens or tok in cand_norm)
+            coverage = overlap / len(tokens)
+            # Match exato / substring forte ou alta cobertura de tokens relevantes
+            if q_norm == cand_norm or (q_norm in cand_norm and len(tokens) >= 1):
+                return cand
+            if len(tokens) <= 2 and overlap == len(tokens):
+                return cand
+            if len(tokens) >= 3 and coverage >= 0.67:
+                return cand
     return None
 
 

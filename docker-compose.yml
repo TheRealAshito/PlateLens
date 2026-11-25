@@ -1,0 +1,18 @@
+services:
+  platelens:
+    build: .
+    container_name: platelens
+    restart: unless-stopped
+    ports:
+      - "${PORT:-8502}:8502"
+    environment:
+      VISION_PROVIDER: ${VISION_PROVIDER:-gemini}
+      GEMINI_API_KEY: ${GEMINI_API_KEY:-}
+      GEMINI_MODEL: ${GEMINI_MODEL:-gemini-3.6-flash}
+      GEMINI_FALLBACK_MODEL: ${GEMINI_FALLBACK_MODEL:-gemini-3.5-flash-lite}
+      OLLAMA_BASE_URL: ${OLLAMA_BASE_URL:-}
+      OLLAMA_MODEL: ${OLLAMA_MODEL:-qwen2.5vl:3b}
+      PLATELENS_DATA_DIR: /app/data
+      MAX_IMAGE_SIDE_PX: ${MAX_IMAGE_SIDE_PX:-1280}
+    volumes:
+      - ./data:/app/data

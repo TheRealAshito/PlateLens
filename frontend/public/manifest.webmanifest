@@ -1,0 +1,9 @@
+{
+  "name": "PlateLens — Diário Alimentar",
+  "short_name": "PlateLens",
+  "description": "Diário alimentar self-hosted com estimativa de calorias por foto e Tabela TACO.",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#020617",
+  "theme_color": "#10b981"
+}

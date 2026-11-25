@@ -1,0 +1,32 @@
+# Ambiente e segredos (nunca commitar chaves de API)
+.env
+.env.*
+!.env.example
+
+# Dados locais persistentes (SQLite e fotos)
+/data/
+*.db
+*.db-shm
+*.db-wal
+/uploads/
+
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+.venv/
+venv/
+
+# Node / Frontend
+node_modules/
+frontend/dist/
+frontend/.vite/
+
+# Relatórios locais
+commit-reports/
+
+# SO / IDE
+.DS_Store
+.vscode/
+.idea/

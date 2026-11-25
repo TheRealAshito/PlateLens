@@ -6,6 +6,7 @@ import {
   ImagePlus,
   KeyRound,
   Minus,
+  Pencil,
   Plus,
   Search,
   Sparkles,
@@ -55,17 +56,29 @@ export default function LogMealPage({
   const [favorites, setFavorites] = useState([])
   const [loadingFavs, setLoadingFavs] = useState(false)
 
-  // Cadastro rápido de alimento personalizado
+  // Cadastro / edição de alimento personalizado
   const [showCustomForm, setShowCustomForm] = useState(false)
+  const [editingFoodId, setEditingFoodId] = useState(null)
+  const [customFoods, setCustomFoods] = useState([])
   const [customFood, setCustomFood] = useState({
     name: '',
     kcal_per_100g: '',
     protein_g: '',
     carbs_g: '',
     fat_g: '',
+    fiber_g: '',
     household_unit_label: '1 porção',
     household_unit_grams: '100',
   })
+
+  async function loadCustomFoods() {
+    try {
+      const { data } = await api.get('/foods/custom')
+      setCustomFoods(data)
+    } catch {
+      // ignora silenciosamente se offline
+    }
+  }
 
   useEffect(() => {
     setEatenDate(selectedDate || todayIsoDate())
@@ -88,6 +101,8 @@ export default function LogMealPage({
         .get('/meals/favorites')
         .then((res) => setFavorites(res.data))
         .finally(() => setLoadingFavs(false))
+    } else if (tab === 'manual') {
+      loadCustomFoods()
     }
   }, [tab])
 
@@ -184,31 +199,73 @@ export default function LogMealPage({
     await recalculateItems([...items, nextItem])
   }
 
-  async function handleCreateCustomFood(e) {
-    e.preventDefault()
+  function resetCustomForm() {
+    setEditingFoodId(null)
+    setShowCustomForm(false)
+    setCustomFood({
+      name: '',
+      kcal_per_100g: '',
+      protein_g: '',
+      carbs_g: '',
+      fat_g: '',
+      fiber_g: '',
+      household_unit_label: '1 porção',
+      household_unit_grams: '100',
+    })
+  }
+
+  function startEditCustomFood(food) {
+    setEditingFoodId(food.id)
+    setCustomFood({
+      name: food.name,
+      kcal_per_100g: String(food.kcal_per_100g),
+      protein_g: String(food.protein_g),
+      carbs_g: String(food.carbs_g),
+      fat_g: String(food.fat_g),
+      fiber_g: String(food.fiber_g ?? 0),
+      household_unit_label: food.household_unit_label || '1 porção',
+      household_unit_grams: String(food.household_unit_grams || 100),
+    })
+    setShowCustomForm(true)
+  }
+
+  async function handleDeleteCustomFood(foodId) {
     setError('')
     try {
-      const { data } = await api.post('/foods', {
-        name: customFood.name,
-        kcal_per_100g: Number(customFood.kcal_per_100g),
-        protein_g: Number(customFood.protein_g || 0),
-        carbs_g: Number(customFood.carbs_g || 0),
-        fat_g: Number(customFood.fat_g || 0),
-        fiber_g: 0,
-        household_unit_label: customFood.household_unit_label || '1 porção',
-        household_unit_grams: Number(customFood.household_unit_grams || 100),
-      })
-      setShowCustomForm(false)
-      setCustomFood({
-        name: '',
-        kcal_per_100g: '',
-        protein_g: '',
-        carbs_g: '',
-        fat_g: '',
-        household_unit_label: '1 porção',
-        household_unit_grams: '100',
-      })
-      await handleAddTacoFood(data)
+      await api.delete(`/foods/${foodId}`)
+      if (editingFoodId === foodId) {
+        resetCustomForm()
+      }
+      await loadCustomFoods()
+    } catch (err) {
+      setError(extractErrorMessage(err))
+    }
+  }
+
+  async function handleSaveCustomFood(e) {
+    e.preventDefault()
+    setError('')
+    const payload = {
+      name: customFood.name,
+      kcal_per_100g: Number(customFood.kcal_per_100g),
+      protein_g: Number(customFood.protein_g || 0),
+      carbs_g: Number(customFood.carbs_g || 0),
+      fat_g: Number(customFood.fat_g || 0),
+      fiber_g: Number(customFood.fiber_g || 0),
+      household_unit_label: customFood.household_unit_label || '1 porção',
+      household_unit_grams: Number(customFood.household_unit_grams || 100),
+    }
+    try {
+      if (editingFoodId !== null) {
+        await api.put(`/foods/${editingFoodId}`, payload)
+        resetCustomForm()
+        await loadCustomFoods()
+      } else {
+        const { data } = await api.post('/foods', payload)
+        resetCustomForm()
+        await loadCustomFoods()
+        await handleAddTacoFood(data)
+      }
     } catch (err) {
       setError(extractErrorMessage(err))
     }
@@ -442,7 +499,14 @@ export default function LogMealPage({
             <div className="flex gap-2">
               <button
                 type="button"
-                onClick={() => setShowCustomForm((v) => !v)}
+                onClick={() => {
+                  if (showCustomForm && editingFoodId === null) {
+                    resetCustomForm()
+                  } else {
+                    setEditingFoodId(null)
+                    setShowCustomForm(true)
+                  }
+                }}
                 className="rounded-xl border border-slate-700 bg-slate-800 px-3 py-2 text-xs font-medium text-slate-200 hover:bg-slate-700"
               >
                 + Alimento próprio
@@ -459,10 +523,14 @@ export default function LogMealPage({
 
           {showCustomForm && (
             <form
-              onSubmit={handleCreateCustomFood}
+              onSubmit={handleSaveCustomFood}
               className="rounded-xl border border-slate-700 bg-slate-950 p-4 space-y-3"
             >
-              <p className="text-xs font-semibold text-emerald-300">Novo alimento personalizado (por 100g)</p>
+              <p className="text-xs font-semibold text-emerald-300">
+                {editingFoodId !== null
+                  ? 'Editar alimento personalizado (por 100g)'
+                  : 'Novo alimento personalizado (por 100g)'}
+              </p>
               <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-3">
                 <input
                   required
@@ -505,6 +573,14 @@ export default function LogMealPage({
                   className="rounded-lg border border-slate-700 bg-slate-900 px-3 py-2 text-xs text-white"
                 />
                 <input
+                  type="number"
+                  step="0.1"
+                  placeholder="Fibra (g)"
+                  value={customFood.fiber_g}
+                  onChange={(e) => setCustomFood({ ...customFood, fiber_g: e.target.value })}
+                  className="rounded-lg border border-slate-700 bg-slate-900 px-3 py-2 text-xs text-white"
+                />
+                <input
                   placeholder="Medida (ex: 1 unidade)"
                   value={customFood.household_unit_label}
                   onChange={(e) => setCustomFood({ ...customFood, household_unit_label: e.target.value })}
@@ -522,7 +598,7 @@ export default function LogMealPage({
               <div className="flex justify-end gap-2">
                 <button
                   type="button"
-                  onClick={() => setShowCustomForm(false)}
+                  onClick={resetCustomForm}
                   className="rounded-lg px-3 py-1.5 text-xs text-slate-400 hover:bg-slate-800"
                 >
                   Cancelar
@@ -531,10 +607,58 @@ export default function LogMealPage({
                   type="submit"
                   className="rounded-lg bg-emerald-500 px-3 py-1.5 text-xs font-semibold text-slate-950"
                 >
-                  Cadastrar e adicionar
+                  {editingFoodId !== null ? 'Salvar alterações' : 'Cadastrar e adicionar'}
                 </button>
               </div>
             </form>
+          )}
+
+          {customFoods.length > 0 && (
+            <div className="space-y-2 border-t border-slate-800 pt-3">
+              <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">
+                Meus alimentos cadastrados ({customFoods.length})
+              </p>
+              <div className="space-y-1.5">
+                {customFoods.map((cf) => (
+                  <div
+                    key={cf.id}
+                    className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-slate-800 bg-slate-950/60 px-3 py-2"
+                  >
+                    <div className="min-w-0">
+                      <p className="truncate text-xs font-semibold text-slate-100">{cf.name}</p>
+                      <p className="text-[11px] text-slate-400">
+                        {Math.round(cf.kcal_per_100g)} kcal · P {cf.protein_g}g · C {cf.carbs_g}g · G {cf.fat_g}g ({cf.household_unit_label}: {cf.household_unit_grams}g)
+                      </p>
+                    </div>
+                    <div className="flex items-center gap-1.5">
+                      <button
+                        type="button"
+                        onClick={() => handleAddTacoFood(cf)}
+                        className="rounded-lg bg-emerald-500/15 px-2.5 py-1 text-[11px] font-semibold text-emerald-300 hover:bg-emerald-500/25"
+                      >
+                        + Usar
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => startEditCustomFood(cf)}
+                        className="rounded-lg bg-slate-800 p-1.5 text-slate-300 hover:bg-slate-700 hover:text-white"
+                        aria-label={`Editar ${cf.name}`}
+                      >
+                        <Pencil className="h-3.5 w-3.5" />
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => handleDeleteCustomFood(cf.id)}
+                        className="rounded-lg bg-rose-500/10 p-1.5 text-rose-400 hover:bg-rose-500/20"
+                        aria-label={`Excluir ${cf.name}`}
+                      >
+                        <Trash2 className="h-3.5 w-3.5" />
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
           )}
         </div>
       )}

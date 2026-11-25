@@ -64,6 +64,7 @@ def init_db(settings: Settings | None = None) -> None:
                 carbs_goal_g REAL NOT NULL DEFAULT 215.0,
                 fat_goal_g REAL NOT NULL DEFAULT 62.0,
                 fiber_goal_g REAL NOT NULL DEFAULT 28.0,
+                water_goal_ml INTEGER NOT NULL DEFAULT 2500,
                 updated_at TEXT NOT NULL
             );
 
@@ -136,8 +137,30 @@ def init_db(settings: Settings | None = None) -> None:
                 value TEXT NOT NULL,
                 updated_at TEXT NOT NULL
             );
+
+            CREATE TABLE IF NOT EXISTS water_logs (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                log_date TEXT NOT NULL,
+                log_time TEXT NOT NULL,
+                amount_ml INTEGER NOT NULL,
+                note TEXT NOT NULL DEFAULT '',
+                created_at TEXT NOT NULL
+            );
+
+            CREATE INDEX IF NOT EXISTS idx_water_logs_date
+                ON water_logs (log_date, log_time);
             """
         )
+
+        # Migração segura para bancos existentes sem water_goal_ml
+        goal_cols = {
+            row["name"]
+            for row in conn.execute("PRAGMA table_info(user_profile_goals)").fetchall()
+        }
+        if "water_goal_ml" not in goal_cols:
+            conn.execute(
+                "ALTER TABLE user_profile_goals ADD COLUMN water_goal_ml INTEGER NOT NULL DEFAULT 2500"
+            )
 
         # Garante meta padrão inicial
         now = utc_now_iso()

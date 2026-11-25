@@ -257,6 +257,7 @@ def calculate_macros_for_calories(
         carbs_g = round(remaining_kcal / 4.0, 0)
 
     fiber_g = round(max(20.0, (target_kcal / 1000.0) * 14.0), 0)
+    water_goal_ml = int(min(5000, max(1500, round((weight_kg * 35.0) / 50.0) * 50)))
     macro_total = max(1.0, (protein_g * 4.0) + (carbs_g * 4.0) + (fat_g * 9.0))
 
     return MacroRecalculateResponse(
@@ -265,6 +266,7 @@ def calculate_macros_for_calories(
         carbs_goal_g=carbs_g,
         fat_goal_g=fat_g,
         fiber_goal_g=fiber_g,
+        water_goal_ml=water_goal_ml,
         protein_pct=round((protein_g * 4.0 / macro_total) * 100.0, 1),
         carbs_pct=round((carbs_g * 4.0 / macro_total) * 100.0, 1),
         fat_pct=round((fat_g * 9.0 / macro_total) * 100.0, 1),
@@ -301,5 +303,6 @@ def calculate_tdee_plan(
         carbs_goal_g=macros.carbs_goal_g,
         fat_goal_g=macros.fat_goal_g,
         fiber_goal_g=macros.fiber_goal_g,
+        water_goal_ml=macros.water_goal_ml,
         goal_delta_kcal=delta,
     )

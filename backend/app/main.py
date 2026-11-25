@@ -12,7 +12,7 @@ from starlette.middleware.base import BaseHTTPMiddleware
 
 from backend.app.config import BASE_DIR, get_settings
 from backend.app.database import init_db
-from backend.app.routers import foods, goals, health, meals, settings as settings_router
+from backend.app.routers import foods, goals, health, meals, settings as settings_router, water
 
 
 class SecurityHeadersMiddleware(BaseHTTPMiddleware):
@@ -61,6 +61,7 @@ app.include_router(settings_router.router)
 app.include_router(foods.router)
 app.include_router(goals.router)
 app.include_router(meals.router)
+app.include_router(water.router)
 
 FRONTEND_DIST = BASE_DIR / "frontend" / "dist"
 

@@ -127,6 +127,41 @@ class CreateCustomFoodRequest(BaseModel):
     household_unit_grams: float = Field(default=100.0, gt=0, le=2000)
 
 
+class UpdateCustomFoodRequest(BaseModel):
+    name: Optional[str] = Field(default=None, min_length=2, max_length=120)
+    category: Optional[str] = Field(default=None, min_length=2, max_length=60)
+    kcal_per_100g: Optional[float] = Field(default=None, ge=0, le=950)
+    protein_g: Optional[float] = Field(default=None, ge=0, le=100)
+    carbs_g: Optional[float] = Field(default=None, ge=0, le=100)
+    fat_g: Optional[float] = Field(default=None, ge=0, le=100)
+    fiber_g: Optional[float] = Field(default=None, ge=0, le=100)
+    household_unit_label: Optional[str] = Field(default=None, min_length=1, max_length=60)
+    household_unit_grams: Optional[float] = Field(default=None, gt=0, le=2000)
+
+
+class WaterEntryCreate(BaseModel):
+    log_date: str = Field(pattern=r"^\d{4}-\d{2}-\d{2}$")
+    log_time: str = Field(pattern=r"^\d{2}:\d{2}$")
+    amount_ml: int = Field(gt=0, le=5000)
+    note: str = Field(default="", max_length=200)
+
+
+class WaterEntryResponse(BaseModel):
+    id: int
+    log_date: str
+    log_time: str
+    amount_ml: int
+    note: str
+    created_at: str
+
+
+class WaterDayResponse(BaseModel):
+    date: str
+    total_ml: int
+    goal_ml: int
+    entries: list[WaterEntryResponse]
+
+
 class GoalsResponse(BaseModel):
     sex: SexType
     age: int
@@ -139,6 +174,7 @@ class GoalsResponse(BaseModel):
     carbs_goal_g: float
     fat_goal_g: float
     fiber_goal_g: float
+    water_goal_ml: int = 2500
     updated_at: str
 
 
@@ -154,6 +190,7 @@ class UpdateGoalsRequest(BaseModel):
     carbs_goal_g: float = Field(ge=0, le=900)
     fat_goal_g: float = Field(ge=10, le=350)
     fiber_goal_g: float = Field(ge=5, le=150)
+    water_goal_ml: int = Field(default=2500, ge=500, le=10000)
 
 
 class TdeeCalculateRequest(BaseModel):
@@ -173,6 +210,7 @@ class TdeeCalculateResponse(BaseModel):
     carbs_goal_g: float
     fat_goal_g: float
     fiber_goal_g: float
+    water_goal_ml: int = 2500
     goal_delta_kcal: float
 
 
@@ -189,6 +227,7 @@ class MacroRecalculateResponse(BaseModel):
     carbs_goal_g: float
     fat_goal_g: float
     fiber_goal_g: float
+    water_goal_ml: int = 2500
     protein_pct: float
     carbs_pct: float
     fat_pct: float

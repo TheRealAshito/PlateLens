@@ -66,7 +66,7 @@ export default function StatsPage() {
         </div>
       ) : (
         <>
-          <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+          <div className="grid grid-cols-2 gap-3 sm:grid-cols-5">
             <div className="rounded-2xl border border-slate-800 bg-slate-900/90 p-4">
               <p className="text-xs text-slate-400">Média diária</p>
               <p className="mt-1 text-xl font-bold text-emerald-400">
@@ -87,6 +87,12 @@ export default function StatsPage() {
             <div className="rounded-2xl border border-slate-800 bg-slate-900/90 p-4">
               <p className="text-xs text-slate-400">Gordura média</p>
               <p className="mt-1 text-xl font-bold text-amber-300">{avg?.avg_fat_g || 0}g</p>
+            </div>
+            <div className="rounded-2xl border border-slate-800 bg-slate-900/90 p-4">
+              <p className="text-xs text-slate-400">Água média</p>
+              <p className="mt-1 text-xl font-bold text-cyan-300">
+                {Math.round(avg?.avg_water_ml || 0)} ml
+              </p>
             </div>
           </div>
 

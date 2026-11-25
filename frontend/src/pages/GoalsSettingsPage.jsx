@@ -113,6 +113,7 @@ export default function GoalsSettingsPage({ aiStatus, onAiStatusUpdated }) {
     setGoals({
       ...goals,
       daily_kcal_goal: tdeeResult.recommended_kcal,
+      water_goal_ml: tdeeResult.water_goal_ml || goals.water_goal_ml || 2500,
       ...nextMacros,
     })
     setGoalFeedback({
@@ -177,6 +178,7 @@ export default function GoalsSettingsPage({ aiStatus, onAiStatusUpdated }) {
         carbs_goal_g: Number(goals.carbs_goal_g),
         fat_goal_g: Number(goals.fat_goal_g),
         fiber_goal_g: Number(goals.fiber_goal_g),
+        water_goal_ml: Number(goals.water_goal_ml || 2500),
       })
       setGoals(data)
       setGoalFeedback({ ok: true, text: 'Metas diárias salvas com sucesso!' })
@@ -411,7 +413,7 @@ export default function GoalsSettingsPage({ aiStatus, onAiStatusUpdated }) {
             </button>
           </div>
 
-          <div className="grid grid-cols-2 gap-3 sm:grid-cols-5">
+          <div className="grid grid-cols-2 gap-3 sm:grid-cols-6">
             <div>
               <label className="mb-1 block text-xs text-slate-400">Calorias (kcal)</label>
               <input
@@ -457,6 +459,18 @@ export default function GoalsSettingsPage({ aiStatus, onAiStatusUpdated }) {
                 value={goals.fiber_goal_g}
                 onChange={(e) => setGoals({ ...goals, fiber_goal_g: e.target.value })}
                 className="w-full rounded-xl border border-slate-700 bg-slate-950 px-3 py-2 text-xs text-white"
+              />
+            </div>
+            <div>
+              <label className="mb-1 block text-xs text-slate-400">Água (ml)</label>
+              <input
+                type="number"
+                min="500"
+                max="10000"
+                step="100"
+                value={goals.water_goal_ml ?? 2500}
+                onChange={(e) => setGoals({ ...goals, water_goal_ml: e.target.value })}
+                className="w-full rounded-xl border border-cyan-500/40 bg-slate-950 px-3 py-2 text-xs text-white"
               />
             </div>
           </div>

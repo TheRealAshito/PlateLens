@@ -61,7 +61,14 @@ export default function TacoSearchModal({ onSelect, onClose }) {
               className="flex w-full items-center justify-between rounded-xl border border-slate-800/80 bg-slate-950/60 px-3.5 py-2.5 text-left transition hover:border-emerald-500/50 hover:bg-slate-800/70"
             >
               <div>
-                <p className="text-sm font-medium text-slate-100">{food.name}</p>
+                <div className="flex items-center gap-1.5">
+                  <p className="text-sm font-medium text-slate-100">{food.name}</p>
+                  {food.is_custom && (
+                    <span className="rounded bg-emerald-500/15 px-1.5 py-0.5 text-[10px] font-semibold text-emerald-300">
+                      Próprio
+                    </span>
+                  )}
+                </div>
                 <p className="text-xs text-slate-400">
                   {food.category} · {Math.round(food.kcal_per_100g)} kcal/100g · {food.household_unit_label} ({food.household_unit_grams}g)
                 </p>

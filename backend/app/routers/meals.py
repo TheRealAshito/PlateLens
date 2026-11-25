@@ -555,9 +555,19 @@ def get_stats_summary(days: int = Query(default=7, ge=1, le=90)):
             """,
             (start_iso, end_iso),
         ).fetchall()
+        water_rows = conn.execute(
+            """
+            SELECT log_date, SUM(amount_ml) AS water_ml
+            FROM water_logs
+            WHERE log_date BETWEEN ? AND ?
+            GROUP BY log_date
+            """,
+            (start_iso, end_iso),
+        ).fetchall()
         goals = dict(conn.execute("SELECT * FROM user_profile_goals WHERE id = 1").fetchone())
 
     by_date = {r["eaten_date"]: dict(r) for r in rows}
+    water_by_date = {r["log_date"]: int(r["water_ml"] or 0) for r in water_rows}
     series = []
     for offset in range(days):
         d = (start_day + timedelta(days=offset)).isoformat()
@@ -572,11 +582,13 @@ def get_stats_summary(days: int = Query(default=7, ge=1, le=90)):
                 "carbs_g": entry["carbs_g"] if entry else 0.0,
                 "fat_g": entry["fat_g"] if entry else 0.0,
                 "fiber_g": entry["fiber_g"] if entry else 0.0,
+                "water_ml": water_by_date.get(d, 0),
                 "goal_kcal": goals["daily_kcal_goal"],
             }
         )
 
     logged_days = [s for s in series if s["meal_count"] > 0]
+    water_days = [s for s in series if s["water_ml"] > 0]
     divisor = len(logged_days) or 1
     averages = {
         "logged_days": len(logged_days),
@@ -584,6 +596,7 @@ def get_stats_summary(days: int = Query(default=7, ge=1, le=90)):
         "avg_protein_g": round(sum(s["protein_g"] for s in logged_days) / divisor, 1) if logged_days else 0.0,
         "avg_carbs_g": round(sum(s["carbs_g"] for s in logged_days) / divisor, 1) if logged_days else 0.0,
         "avg_fat_g": round(sum(s["fat_g"] for s in logged_days) / divisor, 1) if logged_days else 0.0,
+        "avg_water_ml": round(sum(s["water_ml"] for s in water_days) / len(water_days), 0) if water_days else 0.0,
     }
     return {"days": days, "series": series, "averages": averages, "goals": goals}
 

@@ -3,16 +3,19 @@ import {
   ChevronLeft,
   ChevronRight,
   Copy,
+  Droplets,
   Flame,
   Plus,
   Star,
   Trash2,
   Utensils,
+  X,
 } from 'lucide-react'
 import { api, extractErrorMessage } from '../api'
 import {
   MEAL_TYPES,
   MEAL_TYPE_LABELS,
+  currentTimeHHMM,
   formatDateBR,
   shiftIsoDate,
   todayIsoDate,
@@ -41,6 +44,9 @@ function MacroBar({ label, current, goal, unit = 'g', colorClass }) {
 
 export default function DiaryPage({ selectedDate, onChangeDate, onGoToLog }) {
   const [data, setData] = useState(null)
+  const [water, setWater] = useState({ total_ml: 0, goal_ml: 2500, entries: [] })
+  const [customWaterMl, setCustomWaterMl] = useState('')
+  const [waterBusy, setWaterBusy] = useState(false)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
   const [busyId, setBusyId] = useState(null)
@@ -49,12 +55,50 @@ export default function DiaryPage({ selectedDate, onChangeDate, onGoToLog }) {
     setLoading(true)
     setError('')
     try {
-      const res = await api.get('/meals', { params: { date: dateStr } })
-      setData(res.data)
+      const [mealsRes, waterRes] = await Promise.all([
+        api.get('/meals', { params: { date: dateStr } }),
+        api.get('/water', { params: { date: dateStr } }),
+      ])
+      setData(mealsRes.data)
+      setWater(waterRes.data)
     } catch (err) {
       setError(extractErrorMessage(err))
     } finally {
       setLoading(false)
+    }
+  }
+
+  async function handleAddWater(amountMl) {
+    const ml = Math.round(Number(amountMl))
+    if (!ml || ml <= 0 || ml > 5000) return
+    setWaterBusy(true)
+    setError('')
+    try {
+      await api.post('/water', {
+        log_date: selectedDate,
+        log_time: currentTimeHHMM(),
+        amount_ml: ml,
+      })
+      setCustomWaterMl('')
+      const { data: waterData } = await api.get('/water', { params: { date: selectedDate } })
+      setWater(waterData)
+    } catch (err) {
+      setError(extractErrorMessage(err))
+    } finally {
+      setWaterBusy(false)
+    }
+  }
+
+  async function handleDeleteWater(entryId) {
+    setWaterBusy(true)
+    try {
+      await api.delete(`/water/${entryId}`)
+      const { data: waterData } = await api.get('/water', { params: { date: selectedDate } })
+      setWater(waterData)
+    } catch (err) {
+      setError(extractErrorMessage(err))
+    } finally {
+      setWaterBusy(false)
     }
   }
 
@@ -226,6 +270,94 @@ export default function DiaryPage({ selectedDate, onChangeDate, onGoToLog }) {
             colorClass="bg-emerald-400"
           />
         </div>
+      </div>
+
+      {/* Tracker de Água (Hidratação) */}
+      <div className="rounded-2xl border border-slate-800 bg-slate-900/90 p-5 space-y-3.5">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div className="flex items-center gap-3">
+            <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-cyan-500/15 text-cyan-400">
+              <Droplets className="h-5 w-5" />
+            </div>
+            <div>
+              <p className="text-xs uppercase tracking-wide text-slate-400">Hidratação do dia</p>
+              <div className="flex items-baseline gap-2">
+                <span className="text-xl font-bold text-white">{water.total_ml} ml</span>
+                <span className="text-xs text-slate-400">/ {water.goal_ml} ml</span>
+              </div>
+            </div>
+          </div>
+
+          <span className="rounded-xl bg-cyan-500/15 px-3 py-1 text-xs font-semibold text-cyan-300">
+            {water.goal_ml > 0 ? Math.min(100, Math.round((water.total_ml / water.goal_ml) * 100)) : 0}% da meta
+          </span>
+        </div>
+
+        <div className="h-2.5 w-full overflow-hidden rounded-full bg-slate-800">
+          <div
+            className="h-full rounded-full bg-cyan-400 transition-all"
+            style={{
+              width: `${water.goal_ml > 0 ? Math.min(100, Math.round((water.total_ml / water.goal_ml) * 100)) : 0}%`,
+            }}
+          />
+        </div>
+
+        <div className="flex flex-wrap items-center gap-2">
+          {[200, 300, 500].map((ml) => (
+            <button
+              key={ml}
+              type="button"
+              disabled={waterBusy}
+              onClick={() => handleAddWater(ml)}
+              className="rounded-xl border border-cyan-500/30 bg-cyan-500/10 px-3 py-1.5 text-xs font-semibold text-cyan-200 hover:bg-cyan-500/20 disabled:opacity-50"
+            >
+              +{ml} ml
+            </button>
+          ))}
+          <div className="flex items-center gap-1.5 ml-auto">
+            <input
+              type="number"
+              min="50"
+              max="5000"
+              step="50"
+              value={customWaterMl}
+              onChange={(e) => setCustomWaterMl(e.target.value)}
+              placeholder="Outro (ml)"
+              className="w-24 rounded-xl border border-slate-700 bg-slate-950 px-2.5 py-1.5 text-xs text-white placeholder-slate-500"
+            />
+            <button
+              type="button"
+              disabled={waterBusy || !customWaterMl}
+              onClick={() => handleAddWater(customWaterMl)}
+              className="rounded-xl bg-cyan-500 px-3 py-1.5 text-xs font-semibold text-slate-950 hover:bg-cyan-400 disabled:opacity-40"
+            >
+              Add
+            </button>
+          </div>
+        </div>
+
+        {water.entries.length > 0 && (
+          <div className="flex flex-wrap gap-1.5 pt-1">
+            {water.entries.map((w) => (
+              <span
+                key={w.id}
+                className="inline-flex items-center gap-1.5 rounded-lg border border-slate-800 bg-slate-950 px-2.5 py-1 text-[11px] text-slate-300"
+              >
+                <span className="text-slate-500">{w.log_time}</span>
+                <strong className="text-cyan-300">{w.amount_ml} ml</strong>
+                <button
+                  type="button"
+                  disabled={waterBusy}
+                  onClick={() => handleDeleteWater(w.id)}
+                  className="text-slate-500 hover:text-rose-400"
+                  aria-label="Remover registro de água"
+                >
+                  <X className="h-3 w-3" />
+                </button>
+              </span>
+            ))}
+          </div>
+        )}
       </div>
 
       {/* Lista de Refeições */}

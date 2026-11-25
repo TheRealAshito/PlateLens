@@ -40,7 +40,7 @@ def update_goals(payload: UpdateGoalsRequest):
                 activity_level = ?, goal_mode = ?,
                 daily_kcal_goal = ?, protein_goal_g = ?,
                 carbs_goal_g = ?, fat_goal_g = ?, fiber_goal_g = ?,
-                updated_at = ?
+                water_goal_ml = ?, updated_at = ?
             WHERE id = 1
             """,
             (
@@ -55,6 +55,7 @@ def update_goals(payload: UpdateGoalsRequest):
                 payload.carbs_goal_g,
                 payload.fat_goal_g,
                 payload.fiber_goal_g,
+                payload.water_goal_ml,
                 now,
             ),
         )

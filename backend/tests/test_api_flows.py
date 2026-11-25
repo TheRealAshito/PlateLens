@@ -200,6 +200,71 @@ def test_goals_tdee_and_custom_food(client):
     assert search.status_code == 200
     assert any(f["name"] == "Iogurte proteico caseiro" for f in search.json())
 
+    custom_id = custom.json()["id"]
+    listed_custom = client.get("/api/foods/custom")
+    assert listed_custom.status_code == 200
+    assert any(f["id"] == custom_id for f in listed_custom.json())
+
+    # Editar alimento personalizado
+    edited = client.put(
+        f"/api/foods/{custom_id}",
+        json={"name": "Iogurte proteico com chia", "kcal_per_100g": 88.0, "fiber_g": 2.5},
+    )
+    assert edited.status_code == 200
+    assert edited.json()["name"] == "Iogurte proteico com chia"
+    assert edited.json()["kcal_per_100g"] == 88.0
+    assert edited.json()["fiber_g"] == 2.5
+
+    # Alimento padrão da TACO não pode ser editado nem excluído
+    builtin = client.get("/api/foods/search?q=arroz+branco").json()[0]
+    assert builtin["is_custom"] is False
+    assert client.put(f"/api/foods/{builtin['id']}", json={"kcal_per_100g": 300}).status_code == 403
+    assert client.delete(f"/api/foods/{builtin['id']}").status_code == 403
+
+    # Excluir alimento personalizado
+    deleted = client.delete(f"/api/foods/{custom_id}")
+    assert deleted.status_code == 200
+    assert client.get("/api/foods/custom").json() == []
+
+
+def test_water_tracker_crud_and_stats(client):
+    from datetime import date
+
+    today = date.today().isoformat()
+    initial = client.get(f"/api/water?date={today}")
+    assert initial.status_code == 200
+    assert initial.json()["total_ml"] == 0
+    assert initial.json()["goal_ml"] == 2500
+
+    w1 = client.post(
+        "/api/water",
+        json={"log_date": today, "log_time": "09:00", "amount_ml": 300},
+    )
+    w2 = client.post(
+        "/api/water",
+        json={"log_date": today, "log_time": "12:15", "amount_ml": 500},
+    )
+    assert w1.status_code == 201
+    assert w2.status_code == 201
+
+    day_water = client.get(f"/api/water?date={today}").json()
+    assert day_water["total_ml"] == 800
+    assert len(day_water["entries"]) == 2
+
+    # Deletar um registro
+    assert client.delete(f"/api/water/{w1.json()['id']}").status_code == 200
+    assert client.get(f"/api/water?date={today}").json()["total_ml"] == 500
+
+    # Atualizar meta de água e checar stats
+    current_goals = client.get("/api/goals").json()
+    current_goals["water_goal_ml"] = 3000
+    upd = client.put("/api/goals", json=current_goals)
+    assert upd.status_code == 200
+    assert client.get(f"/api/water?date={today}").json()["goal_ml"] == 3000
+
+    stats = client.get("/api/stats/summary?days=7").json()
+    assert stats["averages"]["avg_water_ml"] == 500.0
+
 
 def test_gemini_provider_automatic_429_fallback():
     called_urls: list[str] = []

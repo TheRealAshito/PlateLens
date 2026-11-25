@@ -8,11 +8,52 @@ import {
   Trash2,
 } from 'lucide-react'
 import { api, extractErrorMessage } from '../api'
-import { ACTIVITY_LEVELS, GOAL_MODES } from '../constants'
+import { ACTIVITY_LEVELS, GOAL_MODES, MACRO_PRESETS } from '../constants'
+
+function computeMacrosForCalories(kcalInput, weightKgInput, goalMode, preset) {
+  const targetKcal = Math.max(1000, Number(kcalInput) || 2000)
+  const weightKg = Math.max(30, Number(weightKgInput) || 75)
+  let proteinG = 0
+  let carbsG = 0
+  let fatG = 0
+
+  if (preset === 'zone_30_40_30') {
+    proteinG = Math.round((targetKcal * 0.3) / 4)
+    carbsG = Math.round((targetKcal * 0.4) / 4)
+    fatG = Math.round((targetKcal * 0.3) / 9)
+  } else if (preset === 'low_carb') {
+    const proteinKcal = Math.min(weightKg * 1.8 * 4, targetKcal * 0.4)
+    proteinG = Math.round(proteinKcal / 4)
+    carbsG = Math.round((targetKcal * 0.2) / 4)
+    const remainingFatKcal = Math.max(0, targetKcal - proteinG * 4 - carbsG * 4)
+    fatG = Math.round(remainingFatKcal / 9)
+  } else {
+    const proteinPerKg =
+      preset === 'high_protein' ? 2.1 : goalMode === 'maintain' ? 1.6 : 1.8
+    const maxProtRatio = preset === 'high_protein' ? 0.45 : 0.4
+    const fatRatio = preset === 'high_protein' ? 0.25 : 0.27
+
+    const proteinKcal = Math.min(weightKg * proteinPerKg * 4, targetKcal * maxProtRatio)
+    proteinG = Math.round(proteinKcal / 4)
+    fatG = Math.round((targetKcal * fatRatio) / 9)
+    const remainingKcal = Math.max(0, targetKcal - proteinG * 4 - fatG * 9)
+    carbsG = Math.round(remainingKcal / 4)
+  }
+
+  const fiberG = Math.round(Math.max(20, (targetKcal / 1000) * 14))
+  return {
+    protein_goal_g: proteinG,
+    carbs_goal_g: carbsG,
+    fat_goal_g: fatG,
+    fiber_goal_g: fiberG,
+  }
+}
 
 export default function GoalsSettingsPage({ aiStatus, onAiStatusUpdated }) {
   const [goals, setGoals] = useState(null)
   const [tdeeResult, setTdeeResult] = useState(null)
+  const [macroPreset, setMacroPreset] = useState('balanced')
+  const [autoRestructure, setAutoRestructure] = useState(true)
   const [savingGoals, setSavingGoals] = useState(false)
   const [goalFeedback, setGoalFeedback] = useState(null)
 
@@ -63,18 +104,60 @@ export default function GoalsSettingsPage({ aiStatus, onAiStatusUpdated }) {
 
   function applyTdeeToGoals() {
     if (!tdeeResult || !goals) return
+    const nextMacros = computeMacrosForCalories(
+      tdeeResult.recommended_kcal,
+      goals.weight_kg,
+      goals.goal_mode,
+      macroPreset
+    )
     setGoals({
       ...goals,
       daily_kcal_goal: tdeeResult.recommended_kcal,
-      protein_goal_g: tdeeResult.protein_goal_g,
-      carbs_goal_g: tdeeResult.carbs_goal_g,
-      fat_goal_g: tdeeResult.fat_goal_g,
-      fiber_goal_g: tdeeResult.fiber_goal_g,
+      ...nextMacros,
     })
     setGoalFeedback({
       ok: true,
       text: 'Valores da calculadora aplicados abaixo. Clique em "Salvar metas" para confirmar.',
     })
+  }
+
+  function handleCaloriesChange(rawValue) {
+    if (!goals) return
+    const num = Number(rawValue)
+    if (autoRestructure && rawValue !== '' && num >= 1000 && num <= 8000) {
+      const nextMacros = computeMacrosForCalories(
+        num,
+        goals.weight_kg,
+        goals.goal_mode,
+        macroPreset
+      )
+      setGoals({ ...goals, daily_kcal_goal: rawValue, ...nextMacros })
+      return
+    }
+    setGoals({ ...goals, daily_kcal_goal: rawValue })
+  }
+
+  async function handleRestructureViaApi(nextPreset = macroPreset) {
+    if (!goals) return
+    const kcal = Math.max(1000, Number(goals.daily_kcal_goal) || 2000)
+    try {
+      const { data } = await api.post('/goals/recalculate-macros', {
+        daily_kcal_goal: kcal,
+        weight_kg: Math.max(30, Number(goals.weight_kg) || 75),
+        goal_mode: goals.goal_mode,
+        preset: nextPreset,
+      })
+      setGoals({
+        ...goals,
+        daily_kcal_goal: data.daily_kcal_goal,
+        protein_goal_g: data.protein_goal_g,
+        carbs_goal_g: data.carbs_goal_g,
+        fat_goal_g: data.fat_goal_g,
+        fiber_goal_g: data.fiber_goal_g,
+      })
+    } catch (err) {
+      setGoalFeedback({ ok: false, text: extractErrorMessage(err) })
+    }
   }
 
   async function handleSaveGoals(e) {
@@ -283,15 +366,61 @@ export default function GoalsSettingsPage({ aiStatus, onAiStatusUpdated }) {
 
           <hr className="border-slate-800" />
 
-          <h3 className="text-sm font-semibold text-white">Metas diárias ativas</h3>
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <h3 className="text-sm font-semibold text-white">Metas diárias ativas</h3>
+            <label className="inline-flex cursor-pointer items-center gap-2 text-xs text-slate-300">
+              <input
+                type="checkbox"
+                checked={autoRestructure}
+                onChange={(e) => setAutoRestructure(e.target.checked)}
+                className="rounded border-slate-700 bg-slate-950 text-emerald-500"
+              />
+              Reestruturar macros automaticamente ao alterar calorias
+            </label>
+          </div>
+
+          <div className="flex flex-wrap items-end gap-3">
+            <div className="min-w-[220px] flex-1">
+              <label className="mb-1 block text-xs text-slate-400">
+                Estratégia de distribuição dos macros
+              </label>
+              <select
+                value={macroPreset}
+                onChange={(e) => {
+                  const next = e.target.value
+                  setMacroPreset(next)
+                  if (autoRestructure) {
+                    handleRestructureViaApi(next)
+                  }
+                }}
+                className="w-full rounded-xl border border-slate-700 bg-slate-950 px-3 py-2 text-xs text-white"
+              >
+                {MACRO_PRESETS.map((p) => (
+                  <option key={p.id} value={p.id}>
+                    {p.label}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <button
+              type="button"
+              onClick={() => handleRestructureViaApi(macroPreset)}
+              className="rounded-xl border border-slate-700 bg-slate-800 px-3.5 py-2 text-xs font-medium text-slate-200 hover:bg-slate-700"
+            >
+              Recalcular macros pelas calorias
+            </button>
+          </div>
+
           <div className="grid grid-cols-2 gap-3 sm:grid-cols-5">
             <div>
               <label className="mb-1 block text-xs text-slate-400">Calorias (kcal)</label>
               <input
                 type="number"
+                min="1000"
+                max="8000"
                 value={goals.daily_kcal_goal}
-                onChange={(e) => setGoals({ ...goals, daily_kcal_goal: e.target.value })}
-                className="w-full rounded-xl border border-slate-700 bg-slate-950 px-3 py-2 text-xs text-white"
+                onChange={(e) => handleCaloriesChange(e.target.value)}
+                className="w-full rounded-xl border border-emerald-500/40 bg-slate-950 px-3 py-2 text-xs font-semibold text-white"
               />
             </div>
             <div>
@@ -331,6 +460,23 @@ export default function GoalsSettingsPage({ aiStatus, onAiStatusUpdated }) {
               />
             </div>
           </div>
+
+          {(() => {
+            const pKcal = (Number(goals.protein_goal_g) || 0) * 4
+            const cKcal = (Number(goals.carbs_goal_g) || 0) * 4
+            const fKcal = (Number(goals.fat_goal_g) || 0) * 9
+            const sumKcal = Math.max(1, pKcal + cKcal + fKcal)
+            return (
+              <div className="rounded-xl bg-slate-950/80 px-3.5 py-2 text-[11px] text-slate-400 flex flex-wrap gap-3">
+                <span>
+                  Soma dos macros: <strong className="text-slate-200">{Math.round(pKcal + cKcal + fKcal)} kcal</strong>
+                </span>
+                <span className="text-sky-300">P: {Math.round((pKcal / sumKcal) * 100)}%</span>
+                <span className="text-violet-300">C: {Math.round((cKcal / sumKcal) * 100)}%</span>
+                <span className="text-amber-300">G: {Math.round((fKcal / sumKcal) * 100)}%</span>
+              </div>
+            )
+          })()}
 
           {goalFeedback && (
             <div

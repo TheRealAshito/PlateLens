@@ -6,11 +6,16 @@ from backend.app.config import get_settings
 from backend.app.database import get_connection, utc_now_iso
 from backend.app.schemas import (
     GoalsResponse,
+    MacroRecalculateRequest,
+    MacroRecalculateResponse,
     TdeeCalculateRequest,
     TdeeCalculateResponse,
     UpdateGoalsRequest,
 )
-from backend.app.services.nutrition_engine import calculate_tdee_plan
+from backend.app.services.nutrition_engine import (
+    calculate_macros_for_calories,
+    calculate_tdee_plan,
+)
 
 router = APIRouter(prefix="/api/goals", tags=["goals"])
 
@@ -66,4 +71,14 @@ def calculate_tdee(payload: TdeeCalculateRequest):
         height_cm=payload.height_cm,
         activity_level=payload.activity_level,
         goal_mode=payload.goal_mode,
+    )
+
+
+@router.post("/recalculate-macros", response_model=MacroRecalculateResponse)
+def recalculate_macros(payload: MacroRecalculateRequest):
+    return calculate_macros_for_calories(
+        daily_kcal_goal=payload.daily_kcal_goal,
+        weight_kg=payload.weight_kg,
+        goal_mode=payload.goal_mode,
+        preset=payload.preset,
     )

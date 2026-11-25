@@ -21,6 +21,13 @@ export const GOAL_MODES = [
   { id: 'gain', label: 'Superávit leve (Ganhar massa · +300 kcal)' },
 ]
 
+export const MACRO_PRESETS = [
+  { id: 'balanced', label: 'Equilibrado (por peso · 27% gordura)' },
+  { id: 'high_protein', label: 'Alta Proteína (2,1 g/kg · 25% gordura)' },
+  { id: 'low_carb', label: 'Low Carb (20% carbo · 1,8 g/kg proteína)' },
+  { id: 'zone_30_40_30', label: 'Clássico 30% P / 40% C / 30% G' },
+]
+
 export function todayIsoDate() {
   const d = new Date()
   const y = d.getFullYear()

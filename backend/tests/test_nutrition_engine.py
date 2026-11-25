@@ -7,6 +7,7 @@ from backend.app.database import get_connection, init_db
 from backend.app.schemas import Per100gSchema
 from backend.app.services.nutrition_engine import (
     calculate_item_macros,
+    calculate_macros_for_calories,
     calculate_tdee_plan,
     match_taco_food,
     search_taco_foods,
@@ -80,3 +81,24 @@ def test_calculate_tdee_respects_minimum_floor():
         goal_mode="lose",
     )
     assert plan.recommended_kcal >= 1200.0
+
+
+def test_calculate_macros_for_calories_presets_and_cap():
+    bal = calculate_macros_for_calories(1600.0, weight_kg=80.0, goal_mode="lose", preset="balanced")
+    assert bal.protein_goal_g == 144.0
+    assert bal.fat_goal_g == 48.0
+    assert bal.carbs_goal_g == 148.0
+
+    # Em corte agressivo com peso alto, proteína é limitada a 40% para manter carboidratos viáveis
+    capped = calculate_macros_for_calories(1200.0, weight_kg=95.0, goal_mode="lose", preset="balanced")
+    assert capped.protein_goal_g == 120.0
+    assert capped.carbs_goal_g > 0
+
+    zone = calculate_macros_for_calories(2000.0, weight_kg=75.0, preset="zone_30_40_30")
+    assert zone.protein_goal_g == 150.0
+    assert zone.carbs_goal_g == 200.0
+    assert zone.fat_goal_g == 67.0
+
+    low_carb = calculate_macros_for_calories(1800.0, weight_kg=75.0, preset="low_carb")
+    assert low_carb.carbs_goal_g == 90.0
+    assert low_carb.fat_goal_g > bal.fat_goal_g

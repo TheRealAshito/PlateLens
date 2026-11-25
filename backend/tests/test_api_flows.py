@@ -166,6 +166,21 @@ def test_goals_tdee_and_custom_food(client):
     assert upd.status_code == 200
     assert upd.json()["daily_kcal_goal"] == plan["recommended_kcal"]
 
+    recalc_macros = client.post(
+        "/api/goals/recalculate-macros",
+        json={
+            "daily_kcal_goal": 1750,
+            "weight_kg": 62.0,
+            "goal_mode": "lose",
+            "preset": "high_protein",
+        },
+    )
+    assert recalc_macros.status_code == 200
+    rm = recalc_macros.json()
+    assert rm["daily_kcal_goal"] == 1750.0
+    assert rm["protein_goal_g"] > 100
+    assert rm["protein_pct"] + rm["carbs_pct"] + rm["fat_pct"] == pytest.approx(100.0, abs=0.3)
+
     custom = client.post(
         "/api/foods",
         json={

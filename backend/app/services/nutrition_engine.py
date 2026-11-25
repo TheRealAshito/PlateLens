@@ -9,6 +9,8 @@ from backend.app.database import normalize_text
 from backend.app.schemas import (
     ActivityLevel,
     GoalMode,
+    MacroPreset,
+    MacroRecalculateResponse,
     MealItemDraft,
     MealTotals,
     Per100gSchema,
@@ -217,6 +219,58 @@ def compute_meal_totals(items: list[MealItemDraft]) -> MealTotals:
     )
 
 
+def calculate_macros_for_calories(
+    daily_kcal_goal: float,
+    weight_kg: float,
+    goal_mode: GoalMode = "lose",
+    preset: MacroPreset = "balanced",
+) -> MacroRecalculateResponse:
+    """Reestrutura metas de proteína, carboidrato, gordura e fibra para um alvo calórico."""
+    target_kcal = max(1000.0, float(daily_kcal_goal))
+
+    if preset == "zone_30_40_30":
+        protein_g = round((target_kcal * 0.30) / 4.0, 0)
+        carbs_g = round((target_kcal * 0.40) / 4.0, 0)
+        fat_g = round((target_kcal * 0.30) / 9.0, 0)
+    elif preset == "low_carb":
+        desired_protein_kcal = weight_kg * 1.8 * 4.0
+        protein_kcal = min(desired_protein_kcal, target_kcal * 0.40)
+        protein_g = round(protein_kcal / 4.0, 0)
+        carbs_g = round((target_kcal * 0.20) / 4.0, 0)
+        remaining_fat_kcal = max(0.0, target_kcal - (protein_g * 4.0) - (carbs_g * 4.0))
+        fat_g = round(remaining_fat_kcal / 9.0, 0)
+    else:
+        if preset == "high_protein":
+            protein_per_kg = 2.1
+            max_prot_ratio = 0.45
+            fat_ratio = 0.25
+        else:
+            protein_per_kg = 1.8 if goal_mode in ("lose", "gain") else 1.6
+            max_prot_ratio = 0.40
+            fat_ratio = 0.27
+
+        desired_protein_kcal = weight_kg * protein_per_kg * 4.0
+        protein_kcal = min(desired_protein_kcal, target_kcal * max_prot_ratio)
+        protein_g = round(protein_kcal / 4.0, 0)
+        fat_g = round((target_kcal * fat_ratio) / 9.0, 0)
+        remaining_kcal = max(0.0, target_kcal - (protein_g * 4.0) - (fat_g * 9.0))
+        carbs_g = round(remaining_kcal / 4.0, 0)
+
+    fiber_g = round(max(20.0, (target_kcal / 1000.0) * 14.0), 0)
+    macro_total = max(1.0, (protein_g * 4.0) + (carbs_g * 4.0) + (fat_g * 9.0))
+
+    return MacroRecalculateResponse(
+        daily_kcal_goal=round(target_kcal, 0),
+        protein_goal_g=protein_g,
+        carbs_goal_g=carbs_g,
+        fat_goal_g=fat_g,
+        fiber_goal_g=fiber_g,
+        protein_pct=round((protein_g * 4.0 / macro_total) * 100.0, 1),
+        carbs_pct=round((carbs_g * 4.0 / macro_total) * 100.0, 1),
+        fat_pct=round((fat_g * 9.0 / macro_total) * 100.0, 1),
+    )
+
+
 def calculate_tdee_plan(
     sex: SexType,
     age: int,
@@ -232,22 +286,20 @@ def calculate_tdee_plan(
     delta = GOAL_DELTAS[goal_mode]
     recommended_kcal = max(1200.0, round(tdee + delta, 0))
 
-    protein_per_kg = 1.8 if goal_mode in ("lose", "gain") else 1.6
-    protein_g = round(weight_kg * protein_per_kg, 0)
-    fat_kcal = recommended_kcal * 0.27
-    fat_g = round(fat_kcal / 9.0, 0)
-
-    remaining_kcal = max(0.0, recommended_kcal - (protein_g * 4.0) - (fat_g * 9.0))
-    carbs_g = round(remaining_kcal / 4.0, 0)
-    fiber_g = round(max(20.0, (recommended_kcal / 1000.0) * 14.0), 0)
+    macros = calculate_macros_for_calories(
+        daily_kcal_goal=recommended_kcal,
+        weight_kg=weight_kg,
+        goal_mode=goal_mode,
+        preset="balanced",
+    )
 
     return TdeeCalculateResponse(
         bmr_kcal=round(bmr, 0),
         tdee_kcal=round(tdee, 0),
         recommended_kcal=recommended_kcal,
-        protein_goal_g=protein_g,
-        carbs_goal_g=carbs_g,
-        fat_goal_g=fat_g,
-        fiber_goal_g=fiber_g,
+        protein_goal_g=macros.protein_goal_g,
+        carbs_goal_g=macros.carbs_goal_g,
+        fat_goal_g=macros.fat_goal_g,
+        fiber_goal_g=macros.fiber_goal_g,
         goal_delta_kcal=delta,
     )

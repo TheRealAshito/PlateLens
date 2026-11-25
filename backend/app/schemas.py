@@ -10,6 +10,7 @@ MealType = Literal["cafe", "almoco", "jantar", "lanche"]
 SexType = Literal["M", "F"]
 ActivityLevel = Literal["sedentary", "light", "moderate", "active", "very_active"]
 GoalMode = Literal["lose", "maintain", "gain"]
+MacroPreset = Literal["balanced", "high_protein", "low_carb", "zone_30_40_30"]
 ModelMode = Literal["precise", "lite"]
 
 
@@ -173,6 +174,24 @@ class TdeeCalculateResponse(BaseModel):
     fat_goal_g: float
     fiber_goal_g: float
     goal_delta_kcal: float
+
+
+class MacroRecalculateRequest(BaseModel):
+    daily_kcal_goal: float = Field(ge=1000, le=8000)
+    weight_kg: float = Field(gt=25, le=350)
+    goal_mode: GoalMode = "lose"
+    preset: MacroPreset = "balanced"
+
+
+class MacroRecalculateResponse(BaseModel):
+    daily_kcal_goal: float
+    protein_goal_g: float
+    carbs_goal_g: float
+    fat_goal_g: float
+    fiber_goal_g: float
+    protein_pct: float
+    carbs_pct: float
+    fat_pct: float
 
 
 class AiSettingsStatus(BaseModel):
